@@ -2,87 +2,75 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Smart Video Player</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: black;
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      background-color: black;
-    }
+    html, body { margin:0; padding:0; background:black; height:100%; width:100%; overflow:hidden; }
+    video { width:100%; height:100%; object-fit:contain; background-color:black; }
   </style>
 </head>
 <body>
-  <video id="videoElement" controls muted autoplay playsinline></video>
+  <video id="video" controls muted autoplay playsinline></video>
 
-  <!-- Load libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+  <!-- Library scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/flv.js/1.3.2/flv.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
   <script>
-    const video = document.getElementById("videoElement");
-    const url = decodeURIComponent(window.location.hash.slice(1)).trim().toLowerCase();
+    const video = document.getElementById('video');
+    const url = decodeURIComponent(location.hash.slice(1)).trim();
 
-    function requestFullscreen(elem) {
-      const request = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
-      if (request) request();
+    function requestFullscreen(el) {
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (fn) fn.call(el);
     }
 
-    function getExtension(url) {
-      return url.split('?')[0].split('.').pop();
+    function getExt(u) {
+      return u.split('?')[0].split('.').pop().toLowerCase();
     }
 
-    function playVideo(url) {
-      const ext = getExtension(url);
+    async function setup() {
+      if (!url) return alert('Letakkan URL video di hash, misalnya index.html#https://ex.com/video.mp4');
+      const ext = getExt(url);
 
-      if (ext === "m3u8") {
-        // HLS streaming
-        if (Hls.isSupported()) {
-          const hls = new Hls();
-          hls.loadSource(url);
-          hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            video.play().then(() => requestFullscreen(video)).catch(console.error);
-          });
-        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      try {
+        if (ext === 'm3u8') {
+          // HLS
+          if (Hls && Hls.isSupported()) {
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              video.play(); requestFullscreen(video);
+            });
+          } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = url;
+            video.onloadedmetadata = () => { video.play(); requestFullscreen(video); };
+          } else throw Error('Browser tidak mendukung HLS.');
+        }
+        else if (ext === 'flv') {
+          // FLV
+          if (flvjs && flvjs.isSupported()) {
+            const flvPlayer = flvjs.createPlayer({ type:'flv', url });
+            flvPlayer.attachMediaElement(video);
+            flvPlayer.load();
+            await video.play();
+            requestFullscreen(video);
+          } else throw Error('FLV tidak didukung oleh browser.');
+        }
+        else {
+          // Native
           video.src = url;
-          video.addEventListener("loadedmetadata", () => {
-            video.play().then(() => requestFullscreen(video)).catch(console.error);
-          });
+          video.onloadedmetadata = () => { video.play().then(() => requestFullscreen(video)); };
         }
-      } else if (ext === "flv") {
-        // FLV streaming
-        if (flvjs.isSupported()) {
-          const flvPlayer = flvjs.createPlayer({ type: "flv", url });
-          flvPlayer.attachMediaElement(video);
-          flvPlayer.load();
-          flvPlayer.play().then(() => requestFullscreen(video)).catch(console.error);
-        } else {
-          alert("FLV not supported in this browser.");
-        }
-      } else {
-        // Native formats: mp4, webm, mpeg, mpg, ogv, etc.
-        video.src = url;
-        video.addEventListener("loadedmetadata", () => {
-          video.play().then(() => requestFullscreen(video)).catch(console.error);
-        });
+      }
+      catch (err) {
+        console.error(err);
+        alert('Gagal memutar format "' + ext + '": ' + err.message);
       }
     }
 
-    if (url) {
-      playVideo(url);
-    } else {
-      alert("Masukkan URL video di hash, contoh: index.html#https://example.com/video.mp4");
-    }
+    setup();
   </script>
 </body>
 </html>
