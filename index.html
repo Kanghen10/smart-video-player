@@ -13,16 +13,36 @@
       width: 100%;
       overflow: hidden;
     }
+
     video {
       width: 100%;
       height: 100%;
       object-fit: contain;
       background-color: black;
-      pointer-events: none; /* Mencegah interaksi: klik, tap, drag */
+      pointer-events: none;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: black;
+      color: white;
+      font-size: 1.5em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
     }
   </style>
 </head>
 <body>
+  <div id="overlay">Sedang Loading CCTV...</div>
   <video id="videoElement" autoplay muted playsinline></video>
 
   <!-- Library -->
@@ -31,6 +51,7 @@
 
   <script>
     const video = document.getElementById('videoElement');
+    const overlay = document.getElementById('overlay');
     const url = window.location.hash ? decodeURIComponent(window.location.hash.substring(1)) : '';
 
     function getExt(url) {
@@ -42,8 +63,13 @@
       if (req) req.call(elem);
     }
 
+    function showOfflineMessage() {
+      overlay.textContent = "CCTV sedang Offline";
+    }
+
     async function playVideo(url) {
       const ext = getExt(url);
+      let played = false;
 
       try {
         if (ext === 'flv') {
@@ -54,10 +80,12 @@
             });
             flvPlayer.attachMediaElement(video);
             flvPlayer.load();
+            flvPlayer.on(flvjs.Events.ERROR, showOfflineMessage);
             await video.play();
             requestFullscreen(document.documentElement);
+            played = true;
           } else {
-            alert("Browser tidak mendukung FLV (gunakan Chrome/Edge terbaru)");
+            showOfflineMessage();
           }
 
         } else if (ext === 'm3u8') {
@@ -66,34 +94,59 @@
             hls.loadSource(url);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              video.play().then(() => requestFullscreen(document.documentElement));
+              video.play().then(() => {
+                requestFullscreen(document.documentElement);
+                overlay.style.display = "none";
+              }).catch(() => showOfflineMessage());
             });
+            hls.on(Hls.Events.ERROR, () => showOfflineMessage());
+            played = true;
           } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = url;
             video.addEventListener('loadedmetadata', () => {
-              video.play().then(() => requestFullscreen(document.documentElement));
+              video.play().then(() => {
+                requestFullscreen(document.documentElement);
+                overlay.style.display = "none";
+              }).catch(() => showOfflineMessage());
             });
+            played = true;
           } else {
-            alert("Browser tidak mendukung HLS");
+            showOfflineMessage();
           }
 
         } else if (['mp4', 'webm', 'ogv', 'mpeg', 'mpg'].includes(ext)) {
           video.src = url;
           video.addEventListener('loadedmetadata', () => {
-            video.play().then(() => requestFullscreen(document.documentElement));
+            video.play().then(() => {
+              requestFullscreen(document.documentElement);
+              overlay.style.display = "none";
+            }).catch(() => showOfflineMessage());
           });
+          played = true;
 
         } else {
-          alert("Format video tidak dikenali: " + ext);
+          overlay.textContent = "Format video tidak dikenali: " + ext;
         }
+
+        // Sembunyikan loading saat playback berhasil
+        video.addEventListener('playing', () => {
+          overlay.style.display = "none";
+        });
+
+        // Tampilkan "Offline" jika gagal dalam waktu tertentu
+        setTimeout(() => {
+          if (!video.readyState || video.readyState < 2 || video.paused) {
+            showOfflineMessage();
+          }
+        }, 8000); // 8 detik timeout
       } catch (err) {
         console.error(err);
-        alert("Gagal memuat video: " + err.message);
+        showOfflineMessage();
       }
     }
 
     if (!url) {
-      document.body.innerHTML = "<p style='color: white; text-align: center; font-size: 1.2em; margin-top: 20%;'>Silakan tambahkan URL video di hash.<br>Contoh: <code>index.html#https://domain.com/video.flv</code></p>";
+      overlay.innerHTML = "Silakan tambahkan URL video di hash.<br>Contoh: <code>index.html#https://domain.com/video.flv</code>";
     } else {
       playVideo(url);
     }
