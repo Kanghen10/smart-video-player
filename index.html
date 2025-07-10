@@ -18,11 +18,12 @@
       height: 100%;
       object-fit: contain;
       background-color: black;
+      pointer-events: none; /* Mencegah interaksi: klik, tap, drag */
     }
   </style>
 </head>
 <body>
-  <video id="videoElement" controls autoplay muted playsinline></video>
+  <video id="videoElement" autoplay muted playsinline></video>
 
   <!-- Library -->
   <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
@@ -46,7 +47,6 @@
 
       try {
         if (ext === 'flv') {
-          // FLV - untuk server seperti
           if (flvjs.isSupported()) {
             const flvPlayer = flvjs.createPlayer({ type: 'flv', url }, {
               enableStashBuffer: false,
@@ -55,34 +55,32 @@
             flvPlayer.attachMediaElement(video);
             flvPlayer.load();
             await video.play();
-            requestFullscreen(video);
+            requestFullscreen(document.documentElement);
           } else {
             alert("Browser tidak mendukung FLV (gunakan Chrome/Edge terbaru)");
           }
 
         } else if (ext === 'm3u8') {
-          // M3U8 (HLS)
           if (Hls.isSupported()) {
             const hls = new Hls();
             hls.loadSource(url);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              video.play().then(() => requestFullscreen(video));
+              video.play().then(() => requestFullscreen(document.documentElement));
             });
           } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = url;
             video.addEventListener('loadedmetadata', () => {
-              video.play().then(() => requestFullscreen(video));
+              video.play().then(() => requestFullscreen(document.documentElement));
             });
           } else {
             alert("Browser tidak mendukung HLS");
           }
 
         } else if (['mp4', 'webm', 'ogv', 'mpeg', 'mpg'].includes(ext)) {
-          // Native formats
           video.src = url;
           video.addEventListener('loadedmetadata', () => {
-            video.play().then(() => requestFullscreen(video));
+            video.play().then(() => requestFullscreen(document.documentElement));
           });
 
         } else {
@@ -95,7 +93,7 @@
     }
 
     if (!url) {
-      alert("Silakan tambahkan URL video di bagian #hash\nContoh: index.html#https://domain.com/video.flv");
+      document.body.innerHTML = "<p style='color: white; text-align: center; font-size: 1.2em; margin-top: 20%;'>Silakan tambahkan URL video di hash.<br>Contoh: <code>index.html#https://domain.com/video.flv</code></p>";
     } else {
       playVideo(url);
     }
