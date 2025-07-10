@@ -67,11 +67,23 @@
       overlay.textContent = "CCTV sedang Offline";
     }
 
-    async function playVideo(url) {
+    function hideOverlay() {
+      overlay.style.display = "none";
+    }
+
+    function setupOverlayHideEvents() {
+      video.addEventListener('canplay', hideOverlay);
+      video.addEventListener('playing', hideOverlay);
+      video.addEventListener('timeupdate', hideOverlay);
+    }
+
+    function playVideo(url) {
       const ext = getExt(url);
-      let played = false;
+      let timeoutCheck;
 
       try {
+        setupOverlayHideEvents(); // Aktifkan semua event deteksi berhasil
+
         if (ext === 'flv') {
           if (flvjs.isSupported()) {
             const flvPlayer = flvjs.createPlayer({ type: 'flv', url }, {
@@ -80,10 +92,9 @@
             });
             flvPlayer.attachMediaElement(video);
             flvPlayer.load();
+            flvPlayer.play();
             flvPlayer.on(flvjs.Events.ERROR, showOfflineMessage);
-            await video.play();
             requestFullscreen(document.documentElement);
-            played = true;
           } else {
             showOfflineMessage();
           }
@@ -94,22 +105,16 @@
             hls.loadSource(url);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              video.play().then(() => {
-                requestFullscreen(document.documentElement);
-                overlay.style.display = "none";
-              }).catch(() => showOfflineMessage());
+              video.play();
+              requestFullscreen(document.documentElement);
             });
-            hls.on(Hls.Events.ERROR, () => showOfflineMessage());
-            played = true;
+            hls.on(Hls.Events.ERROR, showOfflineMessage);
           } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
             video.src = url;
             video.addEventListener('loadedmetadata', () => {
-              video.play().then(() => {
-                requestFullscreen(document.documentElement);
-                overlay.style.display = "none";
-              }).catch(() => showOfflineMessage());
+              video.play();
+              requestFullscreen(document.documentElement);
             });
-            played = true;
           } else {
             showOfflineMessage();
           }
@@ -117,28 +122,20 @@
         } else if (['mp4', 'webm', 'ogv', 'mpeg', 'mpg'].includes(ext)) {
           video.src = url;
           video.addEventListener('loadedmetadata', () => {
-            video.play().then(() => {
-              requestFullscreen(document.documentElement);
-              overlay.style.display = "none";
-            }).catch(() => showOfflineMessage());
+            video.play();
+            requestFullscreen(document.documentElement);
           });
-          played = true;
 
         } else {
           overlay.textContent = "Format video tidak dikenali: " + ext;
         }
 
-        // Sembunyikan loading saat playback berhasil
-        video.addEventListener('playing', () => {
-          overlay.style.display = "none";
-        });
-
-        // Tampilkan "Offline" jika gagal dalam waktu tertentu
-        setTimeout(() => {
-          if (!video.readyState || video.readyState < 2 || video.paused) {
+        // Timeout pengecekan apakah video benar-benar berhasil
+        timeoutCheck = setTimeout(() => {
+          if (video.readyState < 2) {
             showOfflineMessage();
           }
-        }, 8000); // 8 detik timeout
+        }, 8000);
       } catch (err) {
         console.error(err);
         showOfflineMessage();
